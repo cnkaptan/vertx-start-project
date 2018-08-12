@@ -1,0 +1,31 @@
+plugins {
+    id 'java'
+    id 'io.vertx.vertx-plugin' version '0.1.0'
+}
+
+
+group 'io.vertx.starter'
+version '1.0-SNAPSHOT'
+
+sourceCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    def vertx_version = "3.5.3"
+    compile "io.vertx:vertx-web:${vertx_version}"
+    compile "io.vertx:vertx-rx-java2:${vertx_version}"
+    compile "io.vertx:vertx-web-templ-freemarker:${vertx_version}"
+    compile "io.vertx:vertx-jdbc-client:${vertx_version}"
+    compile "ch.qos.logback:logback-classic:1.2.3"
+    compile 'org.hsqldb:hsqldb:2.3.4'
+    compile 'com.github.rjeschke:txtmark:0.13'
+    testCompile "junit:junit:4.12"
+    testCompile "io.vertx:vertx-unit:${vertx_version}"
+}
+
+vertx {
+    mainVerticle = 'io.vertx.guides.wiki.MainVerticle'
+}
