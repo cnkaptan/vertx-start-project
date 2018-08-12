@@ -1,11 +1,13 @@
 package io.vertx.guides.wiki;
 
+import com.github.rjeschke.txtmark.Processor;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerRequest;
+import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.logging.Logger;
 import io.vertx.core.logging.LoggerFactory;
@@ -16,6 +18,7 @@ import io.vertx.ext.web.RoutingContext;
 import io.vertx.ext.web.handler.BodyHandler;
 import io.vertx.ext.web.templ.FreeMarkerTemplateEngine;
 
+import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -33,6 +36,11 @@ public class MainVerticle extends AbstractVerticle {
     private static final String SQL_SAVE_PAGE = "update Pages set Content = ? where Id = ?";
     private static final String SQL_ALL_PAGES = "select Name from Pages";
     private static final String SQL_DELETE_PAGE = "delete from Pages where Id = ?";
+
+    private static final String EMPTY_PAGE_MARKDOWN =
+            "# A new page\n" +
+                    "\n" +
+                    "Feel-free to write in Markdown!\n";
 
     private JDBCClient dbClient;
     private Logger LOGGER = LoggerFactory.getLogger(MainVerticle.class);
@@ -100,7 +108,7 @@ public class MainVerticle extends AbstractVerticle {
         Router router = Router.router(vertx);
         router.get("/alive").handler(ro -> ro.response().end("Alive"));
         router.get("/").handler(this::indexHandler);
-//        router.get("/wiki/:page").handler(this::pageRenderingHandler);
+        router.get("/wiki/:page").handler(this::pageRenderingHandler);
         /**
          * This makes all HTTP POST requests go through a first handler, here
          * io.vertx.ext.web.handler.BodyHandler. This handler automatically decodes the body from the
@@ -172,6 +180,55 @@ public class MainVerticle extends AbstractVerticle {
                     }
                 });
             } else {
+                context.fail(car.cause());
+            }
+        });
+    }
+
+    private void pageRenderingHandler(RoutingContext context) {
+        // URL parameters (/wiki/:page here) can be accessed through the context request object.
+        String page = context.request().getParam("page");
+
+        dbClient.getConnection(car -> {
+            if (car.succeeded()) {
+
+                SQLConnection connection = car.result();
+                // Passing argument values to SQL queries is done using a JsonArray, with the elements in order of
+                // the ? symbols in the SQL query.
+                connection.queryWithParams(SQL_GET_PAGE, new JsonArray().add(page), fetch -> {
+                    connection.close();
+
+                    if (fetch.succeeded()) {
+
+                        JsonArray row = fetch.result().getResults()
+                                .stream()
+                                .findFirst()
+                                .orElseGet(() -> new JsonArray().add(-1).add(EMPTY_PAGE_MARKDOWN));
+
+                        Integer id = row.getInteger(0);
+                        String rawContent = row.getString(1);
+
+                        context.put("title", page);
+                        context.put("id", id);
+                        context.put("newPage", fetch.result().getResults().size() == 0 ? "yes" : "no");
+                        context.put("rawContent", rawContent);
+                        // The Processor class comes from the txtmark Markdown rendering library that we use.
+                        context.put("content", Processor.process(rawContent));
+                        context.put("timestamp", new Date().toString());
+
+                        templateEngine.render(context, "templates","/page.ftl" , ar->{
+                            if (ar.succeeded()){
+                                context.response().putHeader("Content-Type", "text/html" );
+                                context.response().end(ar.result());
+                            }else{
+                                context.fail(ar.cause());
+                            }
+                        } );
+                    }else{
+                        context.fail(fetch.cause());
+                    }
+                });
+            }else{
                 context.fail(car.cause());
             }
         });
