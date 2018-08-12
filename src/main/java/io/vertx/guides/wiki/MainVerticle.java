@@ -115,8 +115,8 @@ public class MainVerticle extends AbstractVerticle {
          * HTTP requests (e.g., form submissions), which can then be manipulated as Vert.x buffer objects.
          */
         router.post().handler(BodyHandler.create());
-//        router.post("/save").handler(this::pageUpdateHandler);
-//        router.post("/crete").handler(this::pageCreateHandler);
+        router.post("/save").handler(this::pageUpdateHandler);
+        router.post("/crete").handler(this::pageCreateHandler);
 //        router.post("/delete").handler(this::pageDeletionHandler);
 
         /**
@@ -216,19 +216,81 @@ public class MainVerticle extends AbstractVerticle {
                         context.put("content", Processor.process(rawContent));
                         context.put("timestamp", new Date().toString());
 
-                        templateEngine.render(context, "templates","/page.ftl" , ar->{
-                            if (ar.succeeded()){
-                                context.response().putHeader("Content-Type", "text/html" );
+                        templateEngine.render(context, "templates", "/page.ftl", ar -> {
+                            if (ar.succeeded()) {
+                                context.response().putHeader("Content-Type", "text/html");
                                 context.response().end(ar.result());
-                            }else{
+                            } else {
                                 context.fail(ar.cause());
                             }
-                        } );
-                    }else{
+                        });
+                    } else {
                         context.fail(fetch.cause());
                     }
                 });
-            }else{
+            } else {
+                context.fail(car.cause());
+            }
+        });
+    }
+
+    private void pageCreateHandler(RoutingContext context) {
+        String pageName = context.request().getParam("name");
+        String location = "/wiki/" + pageName;
+
+        if (pageName == null || pageName.isEmpty()) {
+            location = "/";
+        }
+
+        context.response().setStatusCode(303);
+        context.response().putHeader("Location", location);
+        context.response().end();
+    }
+
+
+    private void pageUpdateHandler(RoutingContext context) {
+        /**
+         * Form parameters sent through a HTTP POST request are available from the RoutingContext
+         * object. Note that without a BodyHandler within the Router configuration chain these values would
+         * not be available, and the form submission payload would need to be manually decoded from the
+         * HTTP POST request payload
+         */
+        String id = context.request().getParam("id");
+        String title = context.request().getParam("title");
+        String markdown = context.request().getParam("markdown");
+
+        /**
+         * We rely on a hidden form field rendered in the page.ftl FreeMarker template to know if we are
+         * updating an existing page or saving a new page.
+         */
+        boolean newPage = "yes".equals(context.request().getParam("newPage"));
+
+        dbClient.getConnection(car -> {
+            if (car.succeeded()) {
+                SQLConnection connection = car.result();
+                String sql = newPage ? SQL_CREATE_PAGE : SQL_SAVE_PAGE;
+
+                // Again, preparing the SQL query with parameters uses a JsonArray to pass values.
+                JsonArray params = new JsonArray();
+                if (newPage) {
+                    params.add(title).add(markdown);
+                } else {
+                    params.add(markdown).add(id);
+                }
+
+                // The updateWithParams method is used for insert / update / delete SQL queries.
+                connection.updateWithParams(sql, params, res -> {
+                    connection.close();
+                    if (res.succeeded()) {
+                        // Upon success, we simply redirect to the page that has been edited.
+                        context.response().setStatusCode(303);
+                        context.response().putHeader("Location", "/wiki/" + title);
+                        context.response().end();
+                    } else {
+                        context.fail(res.cause());
+                    }
+                });
+            } else {
                 context.fail(car.cause());
             }
         });
