@@ -117,7 +117,7 @@ public class MainVerticle extends AbstractVerticle {
         router.post().handler(BodyHandler.create());
         router.post("/save").handler(this::pageUpdateHandler);
         router.post("/crete").handler(this::pageCreateHandler);
-//        router.post("/delete").handler(this::pageDeletionHandler);
+        router.post("/delete").handler(this::pageDeletionHandler);
 
         /**
          * The router object can be used as a HTTP server handler, which then dispatches to other
@@ -290,6 +290,28 @@ public class MainVerticle extends AbstractVerticle {
                         context.fail(res.cause());
                     }
                 });
+            } else {
+                context.fail(car.cause());
+            }
+        });
+    }
+
+    private void pageDeletionHandler(RoutingContext context) {
+        String id = context.request().getParam("id");
+        dbClient.getConnection(car -> {
+            if (car.succeeded()) {
+                SQLConnection connection = car.result();
+                connection.updateWithParams(SQL_DELETE_PAGE, new JsonArray().add(id), res -> {
+                    connection.close();
+                    if (res.succeeded()) {
+                        context.response().setStatusCode(303);
+                        context.response().putHeader("Location", "/");
+                        context.response().end();
+                    } else {
+                        context.fail(res.cause());
+                    }
+                });
+
             } else {
                 context.fail(car.cause());
             }
