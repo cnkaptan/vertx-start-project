@@ -7,18 +7,48 @@ plugins {
 group 'io.vertx.starter'
 version '1.0-SNAPSHOT'
 
-sourceCompatibility = 1.8
-
 repositories {
     mavenCentral()
 }
 
+task annotationProcessing(type: JavaCompile, group: 'build') { // codegen
+    source = sourceSets.main.java
+    classpath = configurations.compile + configurations.compileOnly
+    destinationDir = project.file('src/main/generated')
+    options.compilerArgs = [
+            "-proc:only",
+            "-processor", "io.vertx.codegen.CodeGenProcessor",
+            "-AoutputDirectory=${project.projectDir}/src/main"
+    ]
+}
+
+compileJava {
+    targetCompatibility = 1.8
+    sourceCompatibility = 1.8
+
+    dependsOn annotationProcessing
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs += 'src/main/generated'
+        }
+    }
+}
+
 dependencies {
-    def vertx_version = "3.5.3"
+    ext{
+        vertx_version = "3.5.3"
+    }
     compile "io.vertx:vertx-web:${vertx_version}"
+    compile "io.vertx:vertx-web-client:${vertx_version}"
     compile "io.vertx:vertx-rx-java2:${vertx_version}"
     compile "io.vertx:vertx-web-templ-freemarker:${vertx_version}"
     compile "io.vertx:vertx-jdbc-client:${vertx_version}"
+    compile "io.vertx:vertx-service-proxy:${vertx_version}"
+    compileOnly "io.vertx:vertx-codegen:${vertx_version}"
+    compile "io.vertx:vertx-service-proxy:${vertx_version}:processor"
     compile "ch.qos.logback:logback-classic:1.2.3"
     compile 'org.hsqldb:hsqldb:2.3.4'
     compile 'com.github.rjeschke:txtmark:0.13'

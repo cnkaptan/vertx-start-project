@@ -9,4 +9,5 @@
     <title>${context.title} | A Sample Vert.x-powered Wiki</title>
 </head>
 <body>
+
 <div class="container">
